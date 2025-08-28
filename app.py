@@ -20,6 +20,8 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+from web_speech_stt_component import stt_input
+
 # Import utilities
 try:
     from utils import (
@@ -368,41 +370,16 @@ with col1:
     )
 
 with col2:
-    if VOICE_FEATURES_AVAILABLE:
-        # Add container div for better alignment
-        st.markdown('<div class="voice-input-container">', unsafe_allow_html=True)
-        
-        if not st.session_state.is_recording:
-            if st.button("🎤 Voice Input", use_container_width=True, type="primary"):
-                st.session_state.is_recording = True
-                st.rerun()
-        else:
-            st.button("🔴 Recording...", disabled=True, use_container_width=True)
-            
-            # Automatic voice recording with 13 seconds duration
-            with st.spinner("Listening... (13 seconds)"):
-                audio_data = record_audio_from_mic(duration=13)
-                
-            if audio_data:
-                with st.spinner("Converting speech to text..."):
-                    transcribed_text = transcribe_audio(audio_data)
-                    
-                if transcribed_text:
-                    st.session_state.voice_input_text = transcribed_text
-                    st.success(f"Voice recognized: **{transcribed_text}**")
-                    st.session_state.is_recording = False
-                    st.rerun()
-                else:
-                    st.error("Failed to transcribe audio. Please try again.")
-            
-            st.session_state.is_recording = False
-            st.rerun()
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="voice-input-container">', unsafe_allow_html=True)
-        st.info("Voice input not available")
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('<div class="voice-input-container">', unsafe_allow_html=True)
+    
+    # Try Web Speech API first
+    transcript = stt_input(language='en-US', key='main_voice_input')
+    
+    if transcript:
+        st.session_state.voice_input_text = transcript
+        st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # Process User Query
 if user_query:
@@ -646,4 +623,5 @@ st.markdown("""
     <h4>🚀 RAG Prototype with Advanced Voice I/O</h4>
     <p><em>Empowering intelligent document interaction through voice and text</em></p>
 </div>
+
 """, unsafe_allow_html=True)
