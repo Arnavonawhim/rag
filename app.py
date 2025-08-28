@@ -372,11 +372,13 @@ with col1:
 with col2:
     st.markdown('<div class="voice-input-container">', unsafe_allow_html=True)
     
-    # Try Web Speech API first
+    # Web Speech API component
     transcript = stt_input(language='en-US', key='main_voice_input')
     
-    if transcript:
+    # Handle transcript result
+    if transcript and transcript.strip():
         st.session_state.voice_input_text = transcript
+        st.success(f"Voice: {transcript}")
         st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
@@ -625,3 +627,4 @@ st.markdown("""
 </div>
 
 """, unsafe_allow_html=True)
+
