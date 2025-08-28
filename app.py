@@ -364,7 +364,7 @@ col1, col2 = st.columns([4, 1])
 with col1:
     user_query = st.text_input(
         "Ask your question:",
-        value=st.session_state.voice_input_text,
+        value=st.session_state.get('voice_input_text', ''),
         placeholder="Type your question here or use voice input...",
         help="Enter your question about the documents",
         key="main_query_input"
@@ -373,29 +373,147 @@ with col1:
 with col2:
     st.markdown('<div class="voice-input-container">', unsafe_allow_html=True)
     
-    # Display the voice input button
-    stt_input()
-    
-    # Simple voice check using JavaScript
-    voice_check_js = """
+    # Simple voice input component
+    voice_html = """
+    <div style="width: 100%; padding: 0;">
+        <button id="voiceBtn" 
+                style="width: 100%; 
+                       height: 2.5rem; 
+                       background: #ff4b4b; 
+                       color: white; 
+                       border: none; 
+                       border-radius: 4px; 
+                       cursor: pointer;
+                       font-size: 0.9rem;
+                       font-weight: 500;">
+            🎤 Voice Input
+        </button>
+        <div id="voiceStatus" style="margin-top: 4px; font-size: 0.7rem; color: #666; min-height: 15px; text-align: center;"></div>
+    </div>
+
     <script>
-    const transcript = sessionStorage.getItem('voice_transcript');
-    if (transcript) {
-        sessionStorage.removeItem('voice_transcript');
-        // Force a rerun by updating a hidden element
-        const hiddenEl = document.createElement('div');
-        hiddenEl.textContent = transcript;
-        hiddenEl.id = 'voice_result';
-        hiddenEl.style.display = 'none';
-        document.body.appendChild(hiddenEl);
-    }
+    (function() {
+        const button = document.getElementById('voiceBtn');
+        const status = document.getElementById('voiceStatus');
+        let recognition = null;
+        let isListening = false;
+
+        // Check Web Speech API support
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            button.innerHTML = '⚠️ Not Supported';
+            button.disabled = true;
+            button.style.background = '#666';
+            status.innerHTML = 'Not supported';
+            return;
+        }
+
+        // Initialize Speech Recognition
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        button.onclick = function() {
+            if (!isListening) {
+                startListening();
+            }
+        };
+
+        function startListening() {
+            try {
+                isListening = true;
+                button.innerHTML = '🔴 Listening...';
+                button.style.background = '#dc3545';
+                status.innerHTML = 'Speak now...';
+                
+                recognition.start();
+                
+                // Auto-stop after 10 seconds
+                setTimeout(() => {
+                    if (isListening) {
+                        stopListening();
+                    }
+                }, 10000);
+            } catch (error) {
+                status.innerHTML = 'Error starting';
+                stopListening();
+            }
+        }
+
+        function stopListening() {
+            isListening = false;
+            button.innerHTML = '🎤 Voice Input';
+            button.style.background = '#ff4b4b';
+            
+            if (recognition) {
+                recognition.stop();
+            }
+        }
+
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript.trim();
+            status.innerHTML = 'Got: ' + transcript.substring(0, 20) + '...';
+            
+            // Store the result for Streamlit to pick up
+            localStorage.setItem('streamlit_voice_input', transcript);
+            localStorage.setItem('streamlit_voice_timestamp', Date.now().toString());
+            
+            stopListening();
+            
+            // Trigger a page refresh to update Streamlit
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        };
+
+        recognition.onerror = function(event) {
+            status.innerHTML = 'Error: ' + event.error;
+            stopListening();
+        };
+
+        recognition.onend = function() {
+            if (status.innerHTML === 'Speak now...') {
+                status.innerHTML = 'No speech detected';
+            }
+            stopListening();
+        };
+    })();
     </script>
     """
     
-    st.components.v1.html(voice_check_js, height=0)
-    
+    st.components.v1.html(voice_html, height=80)
     st.markdown('</div>', unsafe_allow_html=True)
 
+# Check for voice input from localStorage
+voice_check_html = """
+<script>
+const voiceInput = localStorage.getItem('streamlit_voice_input');
+const voiceTimestamp = localStorage.getItem('streamlit_voice_timestamp');
+
+if (voiceInput && voiceTimestamp) {
+    const now = Date.now();
+    const timestamp = parseInt(voiceTimestamp);
+    
+    // If the voice input is recent (within 2 seconds)
+    if (now - timestamp < 2000) {
+        // Clear the stored values
+        localStorage.removeItem('streamlit_voice_input');
+        localStorage.removeItem('streamlit_voice_timestamp');
+        
+        // Set the voice input in session state by updating the text input
+        const textInput = parent.document.querySelector('input[aria-label="Ask your question:"]');
+        if (textInput) {
+            textInput.value = voiceInput;
+            textInput.dispatchEvent(new Event('input', { bubbles: true }));
+            textInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+}
+</script>
+"""
+
+st.components.v1.html(voice_check_html, height=0)
 # Process User Query
 if user_query:
     with st.chat_message("assistant", avatar="🤖"):
@@ -640,6 +758,7 @@ st.markdown("""
 </div>
 
 """, unsafe_allow_html=True)
+
 
 
 
