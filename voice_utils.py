@@ -22,31 +22,27 @@ import base64
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Always initialize flags
-LOCAL_MIC_AVAILABLE = False
+# Text-to-Speech using gTTS with better error handling
 try:
-    import speech_recognition as sr
-    LOCAL_MIC_AVAILABLE = True
-except Exception as e:
-    logger.warning(f"Local mic not available: {e}")
+    from gtts import gTTS
+    TTS_AVAILABLE = True
+    logger.info("gTTS available - TTS functionality enabled")
+except ImportError as e:
+    TTS_AVAILABLE = False
+    logger.warning(f"gTTS not available: {e}")
 
 # Audio playback support
 try:
     import pygame
     PYGAME_AVAILABLE = True
-    try:
-        pygame.mixer.pre_init(frequency=22050, size=-16, channels=2, buffer=512)
-        pygame.mixer.init()
-        logger.info("Pygame available - enhanced audio playback enabled")
-    except Exception as e:
-        PYGAME_AVAILABLE = False
-        logger.warning(f"Pygame mixer init failed, falling back to Streamlit audio: {e}")
+    pygame.mixer.pre_init(frequency=22050, size=-16, channels=2, buffer=512)
+    pygame.mixer.init()
+    logger.info("Pygame available - enhanced audio playback enabled")
 except ImportError:
     PYGAME_AVAILABLE = False
     logger.info("Pygame not available - using Streamlit audio player only")
 
 AUDIO_PLAYBACK_AVAILABLE = True  # Streamlit always supports audio playback
-
 
 def initialize_voice_state():
     """Initialize voice-related session state variables"""
@@ -65,123 +61,75 @@ def initialize_voice_state():
     if 'voice_duration' not in st.session_state:
         st.session_state.voice_duration = 10
 
-MIC_JS = """
-<script>
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-let mediaRecorder;
-let audioChunks = [];
-
-async function record() {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  mediaRecorder = new MediaRecorder(stream);
-  audioChunks = [];
-  
-  mediaRecorder.ondataavailable = event => {
-    if (event.data.size > 0) {
-      audioChunks.push(event.data);
-    }
-  };
-
-  mediaRecorder.start();
-}
-
-async function stop() {
-  return new Promise(resolve => {
-    mediaRecorder.onstop = async () => {
-      const blob = new Blob(audioChunks, { type: 'audio/wav' });
-      const arrayBuffer = await blob.arrayBuffer();
-      const base64String = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-      const data = JSON.stringify({ "audio": base64String });
-      const textarea = document.getElementById("mic-data");
-      textarea.value = data;
-      textarea.dispatchEvent(new Event("change"));
-      resolve();
-    };
-    mediaRecorder.stop();
-  });
-}
-</script>
-
-<button onclick="record()">🎙️ Start Recording</button>
-<button onclick="stop()">⏹️ Stop</button>
-<textarea id="mic-data" style="display:none"></textarea>
-"""
-
-
-def js_microphone():
-    """Render the JS mic recorder and return a .wav file path if available."""
-    components.html(MIC_JS, height=200)
-    data = st.text_area("mic-data", label_visibility="collapsed")
-    if data:
-        try:
-            payload = json.loads(data)
-            audio_b64 = payload.get("audio")
-            if audio_b64:
-                audio_bytes = base64.b64decode(audio_b64)
-                temp_wav = os.path.join(tempfile.gettempdir(), "browser_mic.wav")
-                with open(temp_wav, "wb") as f:
-                    f.write(audio_bytes)
-                return temp_wav
-        except Exception as e:
-            st.error(f"Error decoding browser mic audio: {e}")
-    return None
-
-
-def record_audio_from_mic(duration=10, sample_rate=16000):
+def record_audio_from_mic(duration=20, sample_rate=16000):
     """
-    Record audio from:
-    - Local mic (speech_recognition) if available
-    - Browser mic (JS fallback) otherwise
+    Record audio from microphone using speech_recognition library
+    
+    Args:
+        duration (int): Maximum recording duration in seconds
+        sample_rate (int): Audio sample rate
+        
+    Returns:
+        sr.AudioData: Recorded audio data or None if failed
     """
-    # Local mic (desktop)
-    if LOCAL_MIC_AVAILABLE:
-        recognizer = sr.Recognizer()
-        try:
-            with sr.Microphone(sample_rate=sample_rate) as source:
-                st.info("🎙️ Adjusting for ambient noise...")
-                recognizer.adjust_for_ambient_noise(source, duration=1)
-                st.success("🎤 Listening... Speak now!")
-                audio = recognizer.listen(source, timeout=2, phrase_time_limit=duration)
-                return audio
-        except Exception as e:
-            st.warning(f"Local microphone failed: {e}")
-
-    # Browser mic (Streamlit Cloud)
-    return js_microphone()
-
+    recognizer = sr.Recognizer()
+    
+    try:
+        with sr.Microphone(sample_rate=sample_rate) as source:
+            # Create a placeholder for dynamic messages
+            status_placeholder = st.empty()
+            
+            status_placeholder.info("Adjusting for ambient noise... Please wait.")
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+            recognizer.energy_threshold = 300
+            
+            status_placeholder.success("Listening... Start speaking now!")
+            
+            # Listen for audio with timeout
+            audio = recognizer.listen(source, timeout=2, phrase_time_limit=duration)
+            status_placeholder.success("Audio recorded successfully!")
+            
+            return audio
+            
+    except sr.WaitTimeoutError:
+        st.error("No speech detected within timeout period")
+        return None
+    except sr.RequestError as e:
+        st.error(f"Microphone error: {e}")
+        return None
+    except Exception as e:
+        st.error(f"Recording failed: {e}")
+        return None
 
 def transcribe_audio(audio_data):
     """
-    Transcribe audio depending on type:
-    - sr.AudioData (local mic)
-    - .wav file path (browser mic)
+    Transcribe audio data to text using Google Speech Recognition
+    
+    Args:
+        audio_data (sr.AudioData): Recorded audio data
+        
+    Returns:
+        str: Transcribed text or None if failed
     """
     if not audio_data:
         return None
-
-    # Local mic transcription
-    if LOCAL_MIC_AVAILABLE and isinstance(audio_data, sr.AudioData):
-        recognizer = sr.Recognizer()
-        try:
-            return recognizer.recognize_google(audio_data, language="en-US")
-        except Exception as e:
-            st.error(f"Local mic transcription failed: {e}")
-            return None
-
-    # Browser mic transcription
-    if isinstance(audio_data, str) and audio_data.endswith(".wav"):
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(audio_data) as source:
-            audio = recognizer.record(source)
-        try:
-            return recognizer.recognize_google(audio, language="en-US")
-        except Exception as e:
-            st.error(f"Browser audio transcription failed: {e}")
-            return None
-
-    return None
+        
+    recognizer = sr.Recognizer()
     
+    try:
+        # Use Google Web Speech API
+        text = recognizer.recognize_google(audio_data, language=st.session_state.get('voice_language', 'en-US'))
+        return text
+    except sr.UnknownValueError:
+        st.error("Could not understand the audio - please try speaking more clearly")
+        return None
+    except sr.RequestError as e:
+        st.error(f"Speech recognition service error: {e}")
+        return None
+    except Exception as e:
+        st.error(f"Transcription failed: {e}")
+        return None
+
 def create_voice_input_interface():
     """Create a clean voice input interface without extra headers or clutter"""
     
@@ -612,8 +560,4 @@ __all__ = [
     'get_system_audio_info',
     'TTS_AVAILABLE',
     'AUDIO_PLAYBACK_AVAILABLE'
-
 ]
-
-
-
