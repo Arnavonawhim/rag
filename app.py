@@ -74,28 +74,6 @@ except Exception as e:
     st.error(f"Error configuring Google Generative AI: {e}")
     st.stop()
 
-def check_voice_input():
-    """Check for voice input from sessionStorage"""
-    check_script = """
-    <script>
-    const transcript = sessionStorage.getItem('voice_transcript');
-    const timestamp = sessionStorage.getItem('voice_timestamp');
-    const currentTime = Date.now();
-    
-    if (transcript && timestamp && (currentTime - timestamp < 5000)) {
-        // Clear the stored values
-        sessionStorage.removeItem('voice_transcript');
-        sessionStorage.removeItem('voice_timestamp');
-        
-        // Send to Streamlit
-        window.parent.postMessage({
-            type: 'streamlit:setComponentValue',
-            value: transcript
-        }, '*');
-    }
-    </script>
-    """
-    return components.html(check_script, height=0)
     
 st.set_page_config(
     page_title="RAG Prototype - Document Q&A",
@@ -398,11 +376,23 @@ with col2:
     # Display the voice input button
     stt_input()
     
-    # Check for voice input
-    voice_result = check_voice_input()
-    if voice_result and voice_result.strip():
-        st.session_state.voice_input_text = voice_result
-        st.rerun()
+    # Simple voice check using JavaScript
+    voice_check_js = """
+    <script>
+    const transcript = sessionStorage.getItem('voice_transcript');
+    if (transcript) {
+        sessionStorage.removeItem('voice_transcript');
+        // Force a rerun by updating a hidden element
+        const hiddenEl = document.createElement('div');
+        hiddenEl.textContent = transcript;
+        hiddenEl.id = 'voice_result';
+        hiddenEl.style.display = 'none';
+        document.body.appendChild(hiddenEl);
+    }
+    </script>
+    """
+    
+    st.components.v1.html(voice_check_js, height=0)
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -650,5 +640,6 @@ st.markdown("""
 </div>
 
 """, unsafe_allow_html=True)
+
 
 
