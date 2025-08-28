@@ -13,8 +13,6 @@ import uuid
 import logging
 import tempfile
 import time
-from dotenv import load_dotenv
-load_dotenv() 
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
@@ -57,23 +55,7 @@ except ImportError as e:
     TTS_AVAILABLE = False
     AUDIO_PLAYBACK_AVAILABLE = False
     VOICE_FEATURES_AVAILABLE = False
-if 'embedding_model_loaded' not in st.session_state:
-    st.session_state.embedding_model_loaded = False
-if 'vector_store' not in st.session_state:
-    st.session_state.vector_store = None
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
-if 'user_query_input' not in st.session_state:
-    st.session_state.user_query_input = ""
-if 'tts_enabled' not in st.session_state:
-    st.session_state.tts_enabled = True
-if 'current_tts_mode' not in st.session_state:
-    st.session_state.current_tts_mode = 'js'
 
-if 'current_embeddings_name' not in st.session_state:
-    st.session_state.current_embeddings_name = None
 # Google AI Configuration
 import google.generativeai as genai
 
@@ -664,6 +646,4 @@ st.markdown("""
     <h4>🚀 RAG Prototype with Advanced Voice I/O</h4>
     <p><em>Empowering intelligent document interaction through voice and text</em></p>
 </div>
-
 """, unsafe_allow_html=True)
-
