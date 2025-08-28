@@ -1,32 +1,16 @@
 streamlit
 streamlit-chat
-
-# Core ML/AI
+streamlit-audiorec
+google-generativeai
+python-dotenv
 sentence-transformers
 scikit-learn
 scipy
 torch
 transformers
 rank-bm25
-
-# Google Gemini
-google-generativeai
-python-dotenv
-
-# Document processing
-PyPDF2
 langchain-text-splitters
-
-# Audio (optional but supported in your code)
-st_audiorec
+PyPDF2
 gTTS
-pygame
 SpeechRecognition
-
-# Utilities
-numpy
-pandas
-tqdm
-regex
-requests
-
+pygame
