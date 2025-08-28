@@ -74,6 +74,29 @@ except Exception as e:
     st.error(f"Error configuring Google Generative AI: {e}")
     st.stop()
 
+def check_voice_input():
+    """Check for voice input from sessionStorage"""
+    check_script = """
+    <script>
+    const transcript = sessionStorage.getItem('voice_transcript');
+    const timestamp = sessionStorage.getItem('voice_timestamp');
+    const currentTime = Date.now();
+    
+    if (transcript && timestamp && (currentTime - timestamp < 5000)) {
+        // Clear the stored values
+        sessionStorage.removeItem('voice_transcript');
+        sessionStorage.removeItem('voice_timestamp');
+        
+        // Send to Streamlit
+        window.parent.postMessage({
+            type: 'streamlit:setComponentValue',
+            value: transcript
+        }, '*');
+    }
+    </script>
+    """
+    return components.html(check_script, height=0)
+    
 st.set_page_config(
     page_title="RAG Prototype - Document Q&A",
     page_icon="📚",
@@ -372,13 +395,13 @@ with col1:
 with col2:
     st.markdown('<div class="voice-input-container">', unsafe_allow_html=True)
     
-    # Web Speech API component
-    transcript = stt_input(language='en-US', key='main_voice_input')
+    # Display the voice input button
+    stt_input()
     
-    # Handle transcript result
-    if transcript and transcript.strip():
-        st.session_state.voice_input_text = transcript
-        st.success(f"Voice: {transcript}")
+    # Check for voice input
+    voice_result = check_voice_input()
+    if voice_result and voice_result.strip():
+        st.session_state.voice_input_text = voice_result
         st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
@@ -627,4 +650,5 @@ st.markdown("""
 </div>
 
 """, unsafe_allow_html=True)
+
 
