@@ -6,7 +6,7 @@ Provides browser-native speech recognition without Python dependencies
 import streamlit as st
 import streamlit.components.v1 as components
 
-def stt_input(language='en-US', key=None):
+def stt_input(language='en-US', key='stt_default'):
     """
     Create a speech-to-text input component using Web Speech API
     
@@ -18,14 +18,10 @@ def stt_input(language='en-US', key=None):
         str: Transcribed text or None
     """
     
-    # Generate unique key if not provided
-    if key is None:
-        key = f"stt_input_{id(language)}"
-    
     # HTML and JavaScript for Web Speech API
     html_code = f"""
-    <div id="{key}_container" style="width: 100%; padding: 0;">
-        <button id="{key}_btn" 
+    <div id="stt_container" style="width: 100%; padding: 0;">
+        <button id="stt_btn" 
                 style="width: 100%; 
                        height: 2.5rem; 
                        background: #ff4b4b; 
@@ -37,13 +33,17 @@ def stt_input(language='en-US', key=None):
                        font-weight: 500;">
             🎤 Voice Input
         </button>
-        <div id="{key}_status" style="margin-top: 8px; font-size: 0.8rem; color: #666;"></div>
+        <div id="stt_status" style="margin-top: 8px; font-size: 0.8rem; color: #666; min-height: 20px;"></div>
     </div>
 
     <script>
     (function() {{
-        const button = document.getElementById('{key}_btn');
-        const status = document.getElementById('{key}_status');
+        // Prevent multiple initializations
+        if (window.sttInitialized) return;
+        window.sttInitialized = true;
+        
+        const button = document.getElementById('stt_btn');
+        const status = document.getElementById('stt_status');
         let recognition = null;
         let isListening = false;
 
@@ -51,7 +51,7 @@ def stt_input(language='en-US', key=None):
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {{
             button.innerHTML = '⚠️ Not Supported';
             button.disabled = true;
-            status.innerHTML = 'Web Speech API not supported in this browser';
+            status.innerHTML = 'Web Speech API not supported';
             return;
         }}
 
@@ -61,6 +61,7 @@ def stt_input(language='en-US', key=None):
         recognition.continuous = false;
         recognition.interimResults = false;
         recognition.lang = '{language}';
+        recognition.maxAlternatives = 1;
 
         button.addEventListener('click', function() {{
             if (!isListening) {{
@@ -71,67 +72,94 @@ def stt_input(language='en-US', key=None):
         }});
 
         function startListening() {{
-            isListening = true;
-            button.innerHTML = '🔴 Listening...';
-            button.style.background = '#dc3545';
-            status.innerHTML = 'Listening... Speak now!';
-            
-            recognition.start();
-            
-            // Auto-stop after 10 seconds
-            setTimeout(() => {{
-                if (isListening) {{
-                    stopListening();
-                }}
-            }}, 10000);
+            try {{
+                isListening = true;
+                button.innerHTML = '🔴 Listening...';
+                button.style.background = '#dc3545';
+                status.innerHTML = 'Listening... Speak now!';
+                
+                recognition.start();
+                
+                // Auto-stop after 10 seconds
+                setTimeout(() => {{
+                    if (isListening) {{
+                        stopListening();
+                    }}
+                }}, 10000);
+            }} catch (error) {{
+                console.error('Start listening error:', error);
+                status.innerHTML = 'Error starting microphone';
+                stopListening();
+            }}
         }}
 
         function stopListening() {{
             isListening = false;
             button.innerHTML = '🎤 Voice Input';
             button.style.background = '#ff4b4b';
-            status.innerHTML = '';
             
             if (recognition) {{
-                recognition.stop();
+                try {{
+                    recognition.stop();
+                }} catch (error) {{
+                    console.error('Stop recognition error:', error);
+                }}
             }}
         }}
 
         recognition.onresult = function(event) {{
-            const transcript = event.results[0][0].transcript;
+            const transcript = event.results[0][0].transcript.trim();
             status.innerHTML = `Recognized: ${{transcript}}`;
             
-            // Send result to Streamlit
-            window.parent.postMessage({{
-                type: 'streamlit:setComponentValue',
-                value: transcript
-            }}, '*');
+            // Send result back to Streamlit
+            const iframe = window.frameElement;
+            if (iframe) {{
+                iframe.contentWindow.parent.postMessage({{
+                    type: 'streamlit:componentValue',
+                    key: '{key}',
+                    value: transcript
+                }}, '*');
+            }}
+            
+            // Also try direct method
+            if (window.parent && window.parent !== window) {{
+                window.parent.postMessage({{
+                    type: 'streamlit:setComponentValue',
+                    value: transcript
+                }}, '*');
+            }}
             
             stopListening();
         }};
 
         recognition.onerror = function(event) {{
             console.error('Speech recognition error:', event.error);
-            status.innerHTML = `Error: ${{event.error}}`;
+            let errorMsg = 'Recognition error';
+            if (event.error === 'no-speech') {{
+                errorMsg = 'No speech detected';
+            }} else if (event.error === 'network') {{
+                errorMsg = 'Network error';
+            }} else if (event.error === 'not-allowed') {{
+                errorMsg = 'Microphone access denied';
+            }}
+            status.innerHTML = errorMsg;
             stopListening();
         }};
 
         recognition.onend = function() {{
+            if (isListening && status.innerHTML === 'Listening... Speak now!') {{
+                status.innerHTML = 'No speech detected';
+            }}
             stopListening();
         }};
     }})();
     </script>
     """
     
-    # Return the component result
-    return components.html(html_code, height=80, key=key)
-
-def create_voice_input_fallback():
-    """
-    Fallback voice input using existing Python-based solution
-    """
-    if st.button("🎤 Voice Input (Python)", use_container_width=True):
-        st.info("Using Python-based voice recognition...")
-        # This would use your existing voice_utils functions
+    # Create component and handle return value
+    try:
+        component_value = components.html(html_code, height=80)
+        return component_value
+    except Exception as e:
+        st.error(f"Voice component error: {{e}}")
         return None
-    return None
