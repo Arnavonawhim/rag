@@ -22,14 +22,23 @@ import base64
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Text-to-Speech using gTTS with better error handling
+# Always initialize flags
+LOCAL_MIC_AVAILABLE = False
+BROWSER_RECORDER_AVAILABLE = False
+
+# Try local microphone (speech_recognition + PyAudio)
 try:
-    from gtts import gTTS
-    TTS_AVAILABLE = True
-    logger.info("gTTS available - TTS functionality enabled")
-except ImportError as e:
-    TTS_AVAILABLE = False
-    logger.warning(f"gTTS not available: {e}")
+    import speech_recognition as sr
+    LOCAL_MIC_AVAILABLE = True
+except ImportError:
+    pass
+
+# Try browser audio recorder
+try:
+    from st_audiorec import st_audiorec
+    BROWSER_RECORDER_AVAILABLE = True
+except ImportError:
+    pass
 
 # Audio playback support
 try:
@@ -563,4 +572,5 @@ __all__ = [
     'AUDIO_PLAYBACK_AVAILABLE'
 
 ]
+
 
