@@ -18,6 +18,7 @@ PyPDF2
 langchain-text-splitters
 
 # Audio (optional but supported in your code)
+st_audiorec
 gTTS
 pygame
 SpeechRecognition
@@ -28,3 +29,4 @@ pandas
 tqdm
 regex
 requests
+
