@@ -66,75 +66,71 @@ def initialize_voice_state():
     if 'voice_duration' not in st.session_state:
         st.session_state.voice_duration = 10
 
-def record_audio_from_mic(duration=20, sample_rate=16000):
+def record_audio_from_mic(duration=10, sample_rate=16000):
     """
-    Record audio from microphone using speech_recognition library
-    
-    Args:
-        duration (int): Maximum recording duration in seconds
-        sample_rate (int): Audio sample rate
-        
-    Returns:
-        sr.AudioData: Recorded audio data or None if failed
+    Record audio either from local microphone (if available) or via browser recorder.
+    Returns raw audio data (sr.AudioData for local mic, bytes for browser).
     """
-    recognizer = sr.Recognizer()
-    
-    try:
-        with sr.Microphone(sample_rate=sample_rate) as source:
-            # Create a placeholder for dynamic messages
-            status_placeholder = st.empty()
-            
-            status_placeholder.info("Adjusting for ambient noise... Please wait.")
-            recognizer.adjust_for_ambient_noise(source, duration=1)
-            recognizer.energy_threshold = 300
-            
-            status_placeholder.success("Listening... Start speaking now!")
-            
-            # Listen for audio with timeout
-            audio = recognizer.listen(source, timeout=2, phrase_time_limit=duration)
-            status_placeholder.success("Audio recorded successfully!")
-            
-            return audio
-            
-    except sr.WaitTimeoutError:
-        st.error("No speech detected within timeout period")
+    # --- Local mic (only works on local machine) ---
+    if LOCAL_MIC_AVAILABLE:
+        recognizer = sr.Recognizer()
+        try:
+            with sr.Microphone(sample_rate=sample_rate) as source:
+                st.info("🎙️ Adjusting for ambient noise...")
+                recognizer.adjust_for_ambient_noise(source, duration=1)
+                st.success("🎤 Listening... Speak now!")
+                audio = recognizer.listen(source, timeout=2, phrase_time_limit=duration)
+                return audio  # sr.AudioData
+        except Exception as e:
+            st.warning(f"Local microphone not usable: {e}")
+
+    # --- Browser recorder fallback (Streamlit Cloud) ---
+    if BROWSER_RECORDER_AVAILABLE:
+        st.info("🎙️ Record using your browser microphone:")
+        wav_audio = st_audiorec()
+        if wav_audio is not None:
+            # Save as temp wav file
+            temp_wav = os.path.join(tempfile.gettempdir(), "browser_audio.wav")
+            with open(temp_wav, "wb") as f:
+                f.write(wav_audio)
+            return temp_wav  # file path to wav
+    else:
+        st.error("❌ No voice recording method available (install PyAudio or streamlit-audiorec).")
         return None
-    except sr.RequestError as e:
-        st.error(f"Microphone error: {e}")
-        return None
-    except Exception as e:
-        st.error(f"Recording failed: {e}")
-        return None
+
 
 def transcribe_audio(audio_data):
     """
-    Transcribe audio data to text using Google Speech Recognition
-    
-    Args:
-        audio_data (sr.AudioData): Recorded audio data
-        
-    Returns:
-        str: Transcribed text or None if failed
+    Transcribe audio depending on source:
+    - Local mic (speech_recognition)
+    - Browser recorder (wav file)
     """
     if not audio_data:
         return None
-        
-    recognizer = sr.Recognizer()
-    
-    try:
-        # Use Google Web Speech API
-        text = recognizer.recognize_google(audio_data, language=st.session_state.get('voice_language', 'en-US'))
-        return text
-    except sr.UnknownValueError:
-        st.error("Could not understand the audio - please try speaking more clearly")
-        return None
-    except sr.RequestError as e:
-        st.error(f"Speech recognition service error: {e}")
-        return None
-    except Exception as e:
-        st.error(f"Transcription failed: {e}")
-        return None
 
+    # Local mic path
+    if LOCAL_MIC_AVAILABLE and isinstance(audio_data, sr.AudioData):
+        recognizer = sr.Recognizer()
+        try:
+            text = recognizer.recognize_google(audio_data, language="en-US")
+            return text
+        except Exception as e:
+            st.error(f"Transcription failed: {e}")
+            return None
+
+    # Browser recorder path
+    if isinstance(audio_data, str) and audio_data.endswith(".wav"):
+        import speech_recognition as sr
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(audio_data) as source:
+            audio = recognizer.record(source)
+        try:
+            text = recognizer.recognize_google(audio, language="en-US")
+            return text
+        except Exception as e:
+            st.error(f"Browser audio transcription failed: {e}")
+            return None
+        return None
 def create_voice_input_interface():
     """Create a clean voice input interface without extra headers or clutter"""
     
@@ -567,3 +563,4 @@ __all__ = [
     'AUDIO_PLAYBACK_AVAILABLE'
 
 ]
+
