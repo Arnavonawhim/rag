@@ -35,14 +35,19 @@ except ImportError as e:
 try:
     import pygame
     PYGAME_AVAILABLE = True
-    pygame.mixer.pre_init(frequency=22050, size=-16, channels=2, buffer=512)
-    pygame.mixer.init()
-    logger.info("Pygame available - enhanced audio playback enabled")
+    try:
+        pygame.mixer.pre_init(frequency=22050, size=-16, channels=2, buffer=512)
+        pygame.mixer.init()
+        logger.info("Pygame available - enhanced audio playback enabled")
+    except Exception as e:
+        PYGAME_AVAILABLE = False
+        logger.warning(f"Pygame mixer init failed, falling back to Streamlit audio: {e}")
 except ImportError:
     PYGAME_AVAILABLE = False
     logger.info("Pygame not available - using Streamlit audio player only")
 
 AUDIO_PLAYBACK_AVAILABLE = True  # Streamlit always supports audio playback
+
 
 def initialize_voice_state():
     """Initialize voice-related session state variables"""
@@ -560,4 +565,5 @@ __all__ = [
     'get_system_audio_info',
     'TTS_AVAILABLE',
     'AUDIO_PLAYBACK_AVAILABLE'
+
 ]
