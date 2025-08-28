@@ -24,21 +24,11 @@ logger = logging.getLogger(__name__)
 
 # Always initialize flags
 LOCAL_MIC_AVAILABLE = False
-BROWSER_RECORDER_AVAILABLE = False
-
-# Try local microphone (speech_recognition + PyAudio)
 try:
     import speech_recognition as sr
     LOCAL_MIC_AVAILABLE = True
-except ImportError:
-    pass
-
-# Try browser audio recorder
-try:
-    from st_audiorec import st_audiorec
-    BROWSER_RECORDER_AVAILABLE = True
-except ImportError:
-    pass
+except Exception as e:
+    logger.warning(f"Local mic not available: {e}")
 
 # Audio playback support
 try:
@@ -75,12 +65,76 @@ def initialize_voice_state():
     if 'voice_duration' not in st.session_state:
         st.session_state.voice_duration = 10
 
+MIC_JS = """
+<script>
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+let mediaRecorder;
+let audioChunks = [];
+
+async function record() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  mediaRecorder = new MediaRecorder(stream);
+  audioChunks = [];
+  
+  mediaRecorder.ondataavailable = event => {
+    if (event.data.size > 0) {
+      audioChunks.push(event.data);
+    }
+  };
+
+  mediaRecorder.start();
+}
+
+async function stop() {
+  return new Promise(resolve => {
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(audioChunks, { type: 'audio/wav' });
+      const arrayBuffer = await blob.arrayBuffer();
+      const base64String = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      const data = JSON.stringify({ "audio": base64String });
+      const textarea = document.getElementById("mic-data");
+      textarea.value = data;
+      textarea.dispatchEvent(new Event("change"));
+      resolve();
+    };
+    mediaRecorder.stop();
+  });
+}
+</script>
+
+<button onclick="record()">🎙️ Start Recording</button>
+<button onclick="stop()">⏹️ Stop</button>
+<textarea id="mic-data" style="display:none"></textarea>
+"""
+
+
+def js_microphone():
+    """Render the JS mic recorder and return a .wav file path if available."""
+    components.html(MIC_JS, height=200)
+    data = st.text_area("mic-data", label_visibility="collapsed")
+    if data:
+        try:
+            payload = json.loads(data)
+            audio_b64 = payload.get("audio")
+            if audio_b64:
+                audio_bytes = base64.b64decode(audio_b64)
+                temp_wav = os.path.join(tempfile.gettempdir(), "browser_mic.wav")
+                with open(temp_wav, "wb") as f:
+                    f.write(audio_bytes)
+                return temp_wav
+        except Exception as e:
+            st.error(f"Error decoding browser mic audio: {e}")
+    return None
+
+
 def record_audio_from_mic(duration=10, sample_rate=16000):
     """
-    Record audio either from local microphone (if available) or via browser recorder.
-    Returns raw audio data (sr.AudioData for local mic, bytes for browser).
+    Record audio from:
+    - Local mic (speech_recognition) if available
+    - Browser mic (JS fallback) otherwise
     """
-    # --- Local mic (only works on local machine) ---
+    # Local mic (desktop)
     if LOCAL_MIC_AVAILABLE:
         recognizer = sr.Recognizer()
         try:
@@ -89,57 +143,45 @@ def record_audio_from_mic(duration=10, sample_rate=16000):
                 recognizer.adjust_for_ambient_noise(source, duration=1)
                 st.success("🎤 Listening... Speak now!")
                 audio = recognizer.listen(source, timeout=2, phrase_time_limit=duration)
-                return audio  # sr.AudioData
+                return audio
         except Exception as e:
-            st.warning(f"Local microphone not usable: {e}")
+            st.warning(f"Local microphone failed: {e}")
 
-    # --- Browser recorder fallback (Streamlit Cloud) ---
-    if BROWSER_RECORDER_AVAILABLE:
-        st.info("🎙️ Record using your browser microphone:")
-        wav_audio = st_audiorec()
-        if wav_audio is not None:
-            # Save as temp wav file
-            temp_wav = os.path.join(tempfile.gettempdir(), "browser_audio.wav")
-            with open(temp_wav, "wb") as f:
-                f.write(wav_audio)
-            return temp_wav  # file path to wav
-    else:
-        st.error("❌ No voice recording method available (install PyAudio or streamlit-audiorec).")
-        return None
+    # Browser mic (Streamlit Cloud)
+    return js_microphone()
 
 
 def transcribe_audio(audio_data):
     """
-    Transcribe audio depending on source:
-    - Local mic (speech_recognition)
-    - Browser recorder (wav file)
+    Transcribe audio depending on type:
+    - sr.AudioData (local mic)
+    - .wav file path (browser mic)
     """
     if not audio_data:
         return None
 
-    # Local mic path
+    # Local mic transcription
     if LOCAL_MIC_AVAILABLE and isinstance(audio_data, sr.AudioData):
         recognizer = sr.Recognizer()
         try:
-            text = recognizer.recognize_google(audio_data, language="en-US")
-            return text
+            return recognizer.recognize_google(audio_data, language="en-US")
         except Exception as e:
-            st.error(f"Transcription failed: {e}")
+            st.error(f"Local mic transcription failed: {e}")
             return None
 
-    # Browser recorder path
+    # Browser mic transcription
     if isinstance(audio_data, str) and audio_data.endswith(".wav"):
-        import speech_recognition as sr
         recognizer = sr.Recognizer()
         with sr.AudioFile(audio_data) as source:
             audio = recognizer.record(source)
         try:
-            text = recognizer.recognize_google(audio, language="en-US")
-            return text
+            return recognizer.recognize_google(audio, language="en-US")
         except Exception as e:
             st.error(f"Browser audio transcription failed: {e}")
             return None
-        return None
+
+    return None
+    
 def create_voice_input_interface():
     """Create a clean voice input interface without extra headers or clutter"""
     
@@ -572,5 +614,6 @@ __all__ = [
     'AUDIO_PLAYBACK_AVAILABLE'
 
 ]
+
 
 
