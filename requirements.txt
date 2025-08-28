@@ -1,49 +1,24 @@
-Of course. Here is the cleaned `requirements.txt` file with all the version numbers removed, as you requested.
-
-Using unpinned versions like this can be useful, but be aware that it might lead to unexpected dependency conflicts when deploying, as `pip` will always install the very latest versions of these packages.
-
------
-
-### \#\# `requirements.txt` (Unpinned Versions)
-
-Replace the contents of your `requirements.txt` file with the list below.
-
-```text
-# Core Framework
 streamlit
 streamlit-chat
-
-# AI & Machine Learning
 torch
 transformers
 sentence-transformers
 scikit-learn
 faiss-cpu
-
-# Google AI Services
 google-generativeai
 google-cloud-texttospeech
-
-# Document & Data Handling
 PyPDF2
 python-docx
 langchain-text-splitters
 pandas
-
-# Search & Ranking
 rank-bm25
 nltk
-
-# Audio Processing
 gTTS
 pygame
 SpeechRecognition
 PyAudio
 pydub
 simpleaudio
-
-# Utilities
 python-dotenv
 altair
 black
-```
