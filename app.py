@@ -13,6 +13,8 @@ import uuid
 import logging
 import tempfile
 import time
+from dotenv import load_dotenv
+load_dotenv() 
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
@@ -646,4 +648,5 @@ st.markdown("""
     <h4>🚀 RAG Prototype with Advanced Voice I/O</h4>
     <p><em>Empowering intelligent document interaction through voice and text</em></p>
 </div>
+
 """, unsafe_allow_html=True)
