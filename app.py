@@ -152,7 +152,7 @@ st.markdown("""
 # Main Title with enhanced styling
 st.markdown("""
 <div class="main-header">
-    <h1>📚 RAG Prototype - Intelligent Document Q&A System</h1>
+    <h1>📚 RAG Prototype</h1>
     <p>Enhanced with Advanced Voice Input/Output Capabilities</p>
 </div>
 """, unsafe_allow_html=True)
@@ -758,6 +758,7 @@ st.markdown("""
 </div>
 
 """, unsafe_allow_html=True)
+
 
 
 
