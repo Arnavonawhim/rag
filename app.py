@@ -57,7 +57,6 @@ except ImportError as e:
     TTS_AVAILABLE = False
     AUDIO_PLAYBACK_AVAILABLE = False
     VOICE_FEATURES_AVAILABLE = False
-"""Initialize voice-related session state variables"""
 if 'voice_text' not in st.session_state:
     st.session_state.voice_text = ""
 if 'is_recording' not in st.session_state:
@@ -101,6 +100,7 @@ st.markdown("""
 <style>
     .main-header {
         background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        font-size: 30px;
         text-align: centre;
         padding: 1rem;
         border-radius: 10px;
@@ -665,5 +665,6 @@ st.markdown("""
 </div>
 
 """, unsafe_allow_html=True)
+
 
 
