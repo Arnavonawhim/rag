@@ -13,14 +13,14 @@ import uuid
 import logging
 import tempfile
 import time
+from dotenv import load_dotenv
+load_dotenv() 
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-from web_speech_stt_component import stt_input
 
 # Import utilities
 try:
@@ -57,6 +57,21 @@ except ImportError as e:
     TTS_AVAILABLE = False
     AUDIO_PLAYBACK_AVAILABLE = False
     VOICE_FEATURES_AVAILABLE = False
+"""Initialize voice-related session state variables"""
+if 'voice_text' not in st.session_state:
+    st.session_state.voice_text = ""
+if 'is_recording' not in st.session_state:
+    st.session_state.is_recording = False
+if 'voice_input_ready' not in st.session_state:
+    st.session_state.voice_input_ready = False
+if 'tts_enabled' not in st.session_state:
+    st.session_state.tts_enabled = TTS_AVAILABLE
+if 'audio_language' not in st.session_state:
+    st.session_state.audio_language = 'en'
+if 'audio_speed' not in st.session_state:
+    st.session_state.audio_speed = False
+if 'voice_duration' not in st.session_state:
+    st.session_state.voice_duration = 10
 
 # Google AI Configuration
 import google.generativeai as genai
@@ -74,7 +89,6 @@ except Exception as e:
     st.error(f"Error configuring Google Generative AI: {e}")
     st.stop()
 
-    
 st.set_page_config(
     page_title="RAG Prototype - Document Q&A",
     page_icon="📚",
@@ -152,7 +166,8 @@ st.markdown("""
 # Main Title with enhanced styling
 st.markdown("""
 <div class="main-header">
-    <h1>📚Intelligent Document Q&A System</h1>
+    <h1>📚 RAG Prototype - Intelligent Document Q&A System</h1>
+    <p>Enhanced with Advanced Voice Input/Output Capabilities</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -363,156 +378,49 @@ col1, col2 = st.columns([4, 1])
 with col1:
     user_query = st.text_input(
         "Ask your question:",
-        value=st.session_state.get('voice_input_text', ''),
+        value=st.session_state.voice_input_text,
         placeholder="Type your question here or use voice input...",
         help="Enter your question about the documents",
         key="main_query_input"
     )
 
 with col2:
-    st.markdown('<div class="voice-input-container">', unsafe_allow_html=True)
-    
-    # Simple voice input component
-    voice_html = """
-    <div style="width: 100%; padding: 0;">
-        <button id="voiceBtn" 
-                style="width: 100%; 
-                       height: 2.5rem; 
-                       background: #ff4b4b; 
-                       color: white; 
-                       border: none; 
-                       border-radius: 4px; 
-                       cursor: pointer;
-                       font-size: 0.9rem;
-                       font-weight: 500;">
-            🎤 Voice Input
-        </button>
-        <div id="voiceStatus" style="margin-top: 4px; font-size: 0.7rem; color: #666; min-height: 15px; text-align: center;"></div>
-    </div>
-
-    <script>
-    (function() {
-        const button = document.getElementById('voiceBtn');
-        const status = document.getElementById('voiceStatus');
-        let recognition = null;
-        let isListening = false;
-
-        // Check Web Speech API support
-        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            button.innerHTML = '⚠️ Not Supported';
-            button.disabled = true;
-            button.style.background = '#666';
-            status.innerHTML = 'Not supported';
-            return;
-        }
-
-        // Initialize Speech Recognition
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
-
-        button.onclick = function() {
-            if (!isListening) {
-                startListening();
-            }
-        };
-
-        function startListening() {
-            try {
-                isListening = true;
-                button.innerHTML = '🔴 Listening...';
-                button.style.background = '#dc3545';
-                status.innerHTML = 'Speak now...';
-                
-                recognition.start();
-                
-                // Auto-stop after 10 seconds
-                setTimeout(() => {
-                    if (isListening) {
-                        stopListening();
-                    }
-                }, 10000);
-            } catch (error) {
-                status.innerHTML = 'Error starting';
-                stopListening();
-            }
-        }
-
-        function stopListening() {
-            isListening = false;
-            button.innerHTML = '🎤 Voice Input';
-            button.style.background = '#ff4b4b';
-            
-            if (recognition) {
-                recognition.stop();
-            }
-        }
-
-        recognition.onresult = function(event) {
-            const transcript = event.results[0][0].transcript.trim();
-            status.innerHTML = 'Got: ' + transcript.substring(0, 20) + '...';
-            
-            // Store the result for Streamlit to pick up
-            localStorage.setItem('streamlit_voice_input', transcript);
-            localStorage.setItem('streamlit_voice_timestamp', Date.now().toString());
-            
-            stopListening();
-            
-            // Trigger a page refresh to update Streamlit
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-        };
-
-        recognition.onerror = function(event) {
-            status.innerHTML = 'Error: ' + event.error;
-            stopListening();
-        };
-
-        recognition.onend = function() {
-            if (status.innerHTML === 'Speak now...') {
-                status.innerHTML = 'No speech detected';
-            }
-            stopListening();
-        };
-    })();
-    </script>
-    """
-    
-    st.components.v1.html(voice_html, height=80)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Check for voice input from localStorage
-voice_check_html = """
-<script>
-const voiceInput = localStorage.getItem('streamlit_voice_input');
-const voiceTimestamp = localStorage.getItem('streamlit_voice_timestamp');
-
-if (voiceInput && voiceTimestamp) {
-    const now = Date.now();
-    const timestamp = parseInt(voiceTimestamp);
-    
-    // If the voice input is recent (within 2 seconds)
-    if (now - timestamp < 2000) {
-        // Clear the stored values
-        localStorage.removeItem('streamlit_voice_input');
-        localStorage.removeItem('streamlit_voice_timestamp');
+    if VOICE_FEATURES_AVAILABLE:
+        # Add container div for better alignment
+        st.markdown('<div class="voice-input-container">', unsafe_allow_html=True)
         
-        // Set the voice input in session state by updating the text input
-        const textInput = parent.document.querySelector('input[aria-label="Ask your question:"]');
-        if (textInput) {
-            textInput.value = voiceInput;
-            textInput.dispatchEvent(new Event('input', { bubbles: true }));
-            textInput.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-    }
-}
-</script>
-"""
+        if not st.session_state.is_recording:
+            if st.button("🎤 Voice Input", use_container_width=True, type="primary"):
+                st.session_state.is_recording = True
+                st.rerun()
+        else:
+            st.button("🔴 Recording...", disabled=True, use_container_width=True)
+            
+            # Automatic voice recording with 13 seconds duration
+            with st.spinner("Listening... (13 seconds)"):
+                audio_data = record_audio_from_mic(duration=13)
+                
+            if audio_data:
+                with st.spinner("Converting speech to text..."):
+                    transcribed_text = transcribe_audio(audio_data)
+                    
+                if transcribed_text:
+                    st.session_state.voice_input_text = transcribed_text
+                    st.success(f"Voice recognized: **{transcribed_text}**")
+                    st.session_state.is_recording = False
+                    st.rerun()
+                else:
+                    st.error("Failed to transcribe audio. Please try again.")
+            
+            st.session_state.is_recording = False
+            st.rerun()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="voice-input-container">', unsafe_allow_html=True)
+        st.info("Voice input not available")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-st.components.v1.html(voice_check_html, height=0)
 # Process User Query
 if user_query:
     with st.chat_message("assistant", avatar="🤖"):
@@ -757,10 +665,3 @@ st.markdown("""
 </div>
 
 """, unsafe_allow_html=True)
-
-
-
-
-
-
-

@@ -44,10 +44,12 @@ try:
         PYGAME_AVAILABLE = False 
         logger.warning(f"Pygame mixer could not be initialized: {e}. Voice features will use browser audio.")
 except ImportError:
+    # This handles the case where pygame is not installed at all
     PYGAME_AVAILABLE = False
-    logger.info("Pygame not available - using Streamlit audio player only")
+    logger.warning("Pygame module not found. Voice features will use browser audio.")
 
 AUDIO_PLAYBACK_AVAILABLE = True  # Streamlit always supports audio playback
+
 
 def initialize_voice_state():
     """Initialize voice-related session state variables"""
