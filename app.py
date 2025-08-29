@@ -101,6 +101,7 @@ st.markdown("""
 <style>
     .main-header {
         background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        text-align: centre;
         padding: 1rem;
         border-radius: 10px;
         color: white;
@@ -166,8 +167,7 @@ st.markdown("""
 # Main Title with enhanced styling
 st.markdown("""
 <div class="main-header">
-    <h1>📚 RAG Prototype - Intelligent Document Q&A System</h1>
-    <p>Enhanced with Advanced Voice Input/Output Capabilities</p>
+    <h1>📚 RAG Prototype</h1>
 </div>
 """, unsafe_allow_html=True)
 
@@ -665,3 +665,4 @@ st.markdown("""
 </div>
 
 """, unsafe_allow_html=True)
+
